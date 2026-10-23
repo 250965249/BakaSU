@@ -11,8 +11,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
@@ -33,8 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.FilterQuality
@@ -692,22 +688,12 @@ private fun ManagerNavEntry(
                         },
                 )
             }
-            val screenFocusRequester = remember { FocusRequester() }
-            // Compose only starts keyboard/D-pad traversal once some node holds focus. Grabbing it
-            // on the screen container makes the first directional key enter the content instead of
-            // being dropped, and the focus group keeps traversal inside the current screen.
-            LaunchedEffect(screenFocusRequester) {
-                runCatching { screenFocusRequester.requestFocus() }
-            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(
                         WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
-                    )
-                    .focusGroup()
-                    .focusRequester(screenFocusRequester)
-                    .focusable(),
+                    ),
             ) {
                 content()
             }

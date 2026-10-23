@@ -134,6 +134,7 @@ android {
         versionCode = managerVersionCode
         versionName = managerVersionName
         applicationId = managerPackageName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val isPrBuild = rootProject.extra["isPrBuild"] as Boolean
         buildConfigField("boolean", "IS_PR_BUILD", isPrBuild.toString())
@@ -197,6 +198,14 @@ dependencies {
     lintChecks(project(":lint-rules"))
     baselineProfile(project(":baselineprofile"))
 
+    constraints {
+        // AGP applies consistent resolution to the androidTest classpath, pinning every module to
+        // whatever the app classpath selected. Compose's UI test library needs
+        // concurrent-futures 1.2.0, so aligning the app classpath to that version keeps both
+        // configurations resolvable instead of failing on a conflicting constraint.
+        implementation("androidx.concurrent:concurrent-futures:1.2.0")
+    }
+
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.core)
     implementation(libs.koin.android)
@@ -223,6 +232,9 @@ dependencies {
     implementation(libs.androidx.compose.runtime.tracing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
