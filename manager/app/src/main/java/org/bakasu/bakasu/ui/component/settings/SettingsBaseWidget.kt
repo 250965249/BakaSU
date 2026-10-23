@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -65,6 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.bakasu.bakasu.ui.component.keyboardFocusRing
 import org.bakasu.bakasu.ui.component.settings.material3internal.rememberAnimatedShape
 import org.bakasu.bakasu.ui.theme.CardConfig
 import org.bakasu.bakasu.ui.theme.ThemeConfig
@@ -274,9 +276,25 @@ fun SettingsBaseWidget(
         baseShape
     }
 
+    val clickable = onClick != null || onLongClick != null
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     var itemModifier = (if (fillMaxWidth) modifier.fillMaxWidth() else modifier)
         .heightIn(min = adaptiveMinHeight)
         .clip(clipShape)
+        .then(
+            // Keyboard and D-pad traversal needs a visible focus target; the Material 3
+            // ListItem shapes below do not change enough between states to be readable.
+            if (clickable) {
+                Modifier.keyboardFocusRing(
+                    focused = isFocused,
+                    shape = clipShape,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Modifier
+            },
+        )
 
     if (isOnBackground && themeConfig.isEnableBlurExp && !backgroundBlurProvided) {
         itemModifier = itemModifier
@@ -364,7 +382,6 @@ fun SettingsBaseWidget(
         descriptionColumnContent != null || foreContent != null
 
     var touchPoint by remember { mutableStateOf(Offset.Zero) }
-    val clickable = onClick != null || onLongClick != null
     val surfaceModifier = itemModifier
         .then(
             if (clickable) {

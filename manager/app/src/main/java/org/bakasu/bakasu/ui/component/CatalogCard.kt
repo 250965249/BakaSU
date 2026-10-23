@@ -1,6 +1,9 @@
 package org.bakasu.bakasu.ui.component
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +15,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,20 +40,38 @@ fun CatalogCard(
     onClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(16.dp),
     containerColor: Color? = null,
+    backgroundEnabled: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val themeConfig = koinInject<ThemeConfig>()
     val cardConfig = koinInject<CardConfig>()
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
     Surface(
-        color = if (themeConfig.isEnableBlurExp) {
+        color = if (!backgroundEnabled || themeConfig.isEnableBlurExp) {
             Color.Transparent
         } else {
             (containerColor ?: MaterialTheme.colorScheme.surfaceBright).copy(cardConfig.cardAlpha)
         },
         modifier = modifier.clip(shape)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .renderBackgroundBlur(),
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .keyboardFocusRing(
+                focused = onClick != null && focused,
+                shape = shape,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            .then(if (backgroundEnabled) Modifier.renderBackgroundBlur() else Modifier),
     ) {
         Column(Modifier.padding(contentPadding), content = content)
     }

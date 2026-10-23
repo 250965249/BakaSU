@@ -18,10 +18,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -143,6 +145,7 @@ import org.bakasu.bakasu.ui.component.WarningCard
 import org.bakasu.bakasu.ui.component.ZipFileDetector
 import org.bakasu.bakasu.ui.component.ZipFileInfo
 import org.bakasu.bakasu.ui.component.ZipType
+import org.bakasu.bakasu.ui.component.keyboardFocusRing
 import org.bakasu.bakasu.ui.component.rememberConfirmDialog
 import org.bakasu.bakasu.ui.component.rememberLoadingDialog
 import org.bakasu.bakasu.ui.component.rememberSearchAppBarScrollBehavior
@@ -1238,9 +1241,19 @@ fun ModuleItem(
         isEnabled = module.enabled
     }
 
+    // Keyboard/D-pad focus is tracked on the row so the card can show where focus is.
+    val rowInteractionSource = remember { MutableInteractionSource() }
+    val rowFocused by rowInteractionSource.collectIsFocusedAsState()
+    val rowShape = RoundedCornerShape(16.dp)
+
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(rowShape)
+            .keyboardFocusRing(
+                focused = rowFocused,
+                shape = rowShape,
+                color = MaterialTheme.colorScheme.primary,
+            )
             .renderBackgroundBlur(),
         color =
             if (themeConfig.isEnableBlurExp) {
@@ -1264,6 +1277,8 @@ fun ModuleItem(
                 .run {
                     if (module.hasActionScript || module.hasWebUi) {
                         combinedClickable(
+                            interactionSource = rowInteractionSource,
+                            indication = LocalIndication.current,
                             onClick = {
                                 if (module.hasWebUi) {
                                     onClick(module)

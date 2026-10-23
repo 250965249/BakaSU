@@ -7,6 +7,8 @@ import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -174,6 +177,9 @@ fun RowScope.FloatingBottomBarItem(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scale = LocalFloatingBottomBarTabScale.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val focusShape = RoundedCornerShape(16.dp)
     Column(
         modifier
             .semantics(mergeDescendants = true) {
@@ -186,7 +192,9 @@ fun RowScope.FloatingBottomBarItem(
             }
             .onKeyEvent { event ->
                 val activationKey = event.key == Key.Enter ||
-                    event.key == Key.NumPadEnter || event.key == Key.Spacebar
+                    event.key == Key.NumPadEnter ||
+                    event.key == Key.Spacebar ||
+                    event.key == Key.DirectionCenter
                 if (activationKey) {
                     if (event.type == KeyEventType.KeyUp) onClick()
                     true
@@ -194,7 +202,12 @@ fun RowScope.FloatingBottomBarItem(
                     false
                 }
             }
-            .focusable()
+            .focusable(interactionSource = interactionSource)
+            .keyboardFocusRing(
+                focused = focused,
+                shape = focusShape,
+                color = MaterialTheme.colorScheme.primary,
+            )
             .fillMaxHeight()
             .weight(1f)
             .graphicsLayer {
