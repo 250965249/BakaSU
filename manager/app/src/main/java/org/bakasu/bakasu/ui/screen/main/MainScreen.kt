@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -191,7 +192,17 @@ fun MainScreen(
                 Box(
                     modifier = Modifier.blurSource(),
                 ) {
-                    content(innerPadding.calculateBottomPadding())
+                    // Reserve the bottom bar's height outside the pager. Content must not paint
+                    // underneath the floating bar: directional focus compares node centers, and
+                    // a bar that sits above the last card can never be found with DOWN, which
+                    // strands focus on the final card forever.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding()),
+                    ) {
+                        content(0.dp)
+                    }
                 }
             }
         } else {

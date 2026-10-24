@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -373,6 +374,9 @@ fun FloatingBottomBar(
                     tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
                 }
                 .selectableGroup()
+                // Without a focus group, LEFT/RIGHT from a tab searched the whole screen and
+                // landed in the page content above, so the bar could not be traversed sideways.
+                .focusGroup()
                 .graphicsLayer { translationX = panelOffset }
                 .dropShadow(
                     shape = pillShape,
