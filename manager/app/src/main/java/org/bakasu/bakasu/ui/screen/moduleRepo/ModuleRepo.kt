@@ -74,6 +74,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -154,6 +156,7 @@ fun ModuleRepoScreen(repositoryUrl: String? = null) {
     val layoutDirection = LocalLayoutDirection.current
     val snackBarHost = LocalSnackbarHost.current
     val topAppBarState = rememberTopAppBarState()
+    val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = rememberSearchAppBarScrollBehavior(
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState),
     )
@@ -266,6 +269,7 @@ fun ModuleRepoScreen(repositoryUrl: String? = null) {
                 searchBarPlaceHolderText = stringResource(R.string.search_modules),
                 preserveStateOnNavigation = true,
                 searchContext = uiState.repositoryUrl,
+                contentDownFocusRequester = contentFocusRequester,
             )
         },
         containerColor = Color.Transparent,
@@ -293,7 +297,10 @@ fun ModuleRepoScreen(repositoryUrl: String? = null) {
             when (uiState.content) {
                 CatalogContent.MODULES -> LazyColumn(
                     state = moduleListState,
-                    modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .focusRequester(contentFocusRequester),
                     contentPadding = PaddingValues(
                         start = innerPadding.calculateStartPadding(layoutDirection) + 16.dp,
                         top = innerPadding.calculateTopPadding(),

@@ -52,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -141,6 +143,7 @@ private fun SulogScreenContent(
     actions: SulogActions,
 ) {
     val cardConfig: CardConfig = koinInject()
+    val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = rememberSearchAppBarScrollBehavior(
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
             rememberTopAppBarState(
@@ -223,6 +226,7 @@ private fun SulogScreenContent(
                 },
                 scrollBehavior = scrollBehavior,
                 searchBarPlaceHolderText = stringResource(R.string.sulog_search_placeholder),
+                contentDownFocusRequester = contentFocusRequester,
             )
         },
         contentWindowInsets = adaptiveScaffoldWindowInsets(),
@@ -262,7 +266,8 @@ private fun SulogScreenContent(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .focusRequester(contentFocusRequester),
                 ) {
                     item {
                         Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding()))

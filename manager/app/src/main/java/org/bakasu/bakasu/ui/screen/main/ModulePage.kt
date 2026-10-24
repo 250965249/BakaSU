@@ -100,6 +100,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -327,6 +329,7 @@ fun ModulePage(bottomPadding: Dp) {
     val hideInstallButton = isSafeMode || uiState.hasMagisk
 
     val topAppBarState = rememberTopAppBarState()
+    val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = rememberSearchAppBarScrollBehavior(
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState),
     )
@@ -370,6 +373,7 @@ fun ModulePage(bottomPadding: Dp) {
                 },
                 scrollBehavior = scrollBehavior,
                 searchBarPlaceHolderText = stringResource(R.string.search_modules),
+                contentDownFocusRequester = contentFocusRequester,
             )
         },
         floatingActionButton = {
@@ -469,7 +473,9 @@ fun ModulePage(bottomPadding: Dp) {
                     viewModel = viewModel,
                     uiState = uiState,
                     listState = listState,
-                    modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                    modifier = Modifier
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .focusRequester(contentFocusRequester),
                     onUpdateModule = {
                         navigator.push(Route.Flash.moduleUpdate(it.toString()))
                     },

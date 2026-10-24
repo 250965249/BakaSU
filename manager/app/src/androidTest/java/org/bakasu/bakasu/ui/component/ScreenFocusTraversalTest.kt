@@ -47,8 +47,7 @@ class ScreenFocusTraversalTest {
         config = ComposeUiTestConfig(inputMode = InputMode.Keyboard),
     )
 
-    private fun Modifier.focusItem(tag: String, itemSize: Dp = 120.dp): Modifier =
-        this.testTag(tag).size(itemSize).focusable()
+    private fun Modifier.focusItem(tag: String, itemSize: Dp = 120.dp): Modifier = this.testTag(tag).size(itemSize).focusable()
 
     @Test
     fun firstDirectionalKeyEntersContentWithoutFocusableContainer() {

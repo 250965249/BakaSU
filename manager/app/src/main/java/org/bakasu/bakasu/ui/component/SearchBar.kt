@@ -335,6 +335,7 @@ private fun CompactSearchBar(
     shape: Shape = inputFieldShape,
     requestFocus: Boolean = false,
     onFocusRequestHandled: () -> Unit = {},
+    downFocusRequester: FocusRequester? = null,
 ) {
     val themeConfig: ThemeConfig = koinInject()
     val cardConfig: CardConfig = koinInject()
@@ -414,6 +415,13 @@ private fun CompactSearchBar(
             .focusRequester(focusRequester)
             .focusProperties {
                 canFocus = allowFocus
+                // Directional search inside the top app bar only sees the bar's own buttons, so
+                // DOWN from the search field bounced back up to a navigation action and the
+                // screen content below could never be reached. Route DOWN to the caller's first
+                // content target instead.
+                if (downFocusRequester != null) {
+                    down = downFocusRequester
+                }
             },
         textStyle = MaterialTheme.typography.bodyMedium.copy(
             color = MaterialTheme.colorScheme.onSurface,
@@ -480,6 +488,7 @@ fun SearchAppBar(
     searchBarPlaceHolderText: String,
     preserveStateOnNavigation: Boolean = false,
     searchContext: String? = null,
+    contentDownFocusRequester: FocusRequester? = null,
 ) {
     val themeConfig: ThemeConfig = koinInject()
     val cardConfig: CardConfig = koinInject()
@@ -644,6 +653,7 @@ fun SearchAppBar(
                     onFocusRequestHandled = {
                         requestSearchFocus = false
                     },
+                    downFocusRequester = contentDownFocusRequester,
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

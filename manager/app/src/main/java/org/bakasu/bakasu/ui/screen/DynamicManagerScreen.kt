@@ -39,6 +39,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -80,6 +82,7 @@ fun DynamicManagerScreen() {
     val navigator = LocalNavigator.current
     val viewModel = koinViewModel<DynamicManagerViewModel>()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val contentFocusRequester = remember { FocusRequester() }
     val scrollBehavior = rememberSearchAppBarScrollBehavior(
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState()),
     )
@@ -161,6 +164,7 @@ fun DynamicManagerScreen() {
                 onBackClick = { navigator.pop() },
                 scrollBehavior = scrollBehavior,
                 searchBarPlaceHolderText = stringResource(R.string.search_apps),
+                contentDownFocusRequester = contentFocusRequester,
             )
         },
         snackbarHost = { SwipeableSnackbarHost(hostState = snackbarHost) },
@@ -206,7 +210,8 @@ fun DynamicManagerScreen() {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .focusRequester(contentFocusRequester),
                     contentPadding = PaddingValues(
                         top = paddingValues.calculateTopPadding() + 5.dp,
                         start = 0.dp,

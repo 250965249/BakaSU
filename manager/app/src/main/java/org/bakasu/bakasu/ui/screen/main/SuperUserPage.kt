@@ -51,6 +51,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -176,6 +178,7 @@ fun SuperUserPage(bottomPadding: Dp) {
     }
 
     val navigator = LocalNavigator.current
+    val firstRowFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         viewModel.dispatch(SuperUserUiAction.Search(""))
@@ -224,6 +227,7 @@ fun SuperUserPage(bottomPadding: Dp) {
                 },
                 scrollBehavior = scrollBehavior,
                 searchBarPlaceHolderText = stringResource(R.string.search_apps),
+                contentDownFocusRequester = firstRowFocusRequester,
             )
         },
         containerColor = Color.Transparent,
@@ -243,6 +247,7 @@ fun SuperUserPage(bottomPadding: Dp) {
             listState = listState,
             scrollBehavior = scrollBehavior,
             bottomPadding = bottomPadding,
+            firstRowFocusRequester = firstRowFocusRequester,
         )
     }
 }
@@ -297,6 +302,7 @@ private fun SuperUserContent(
     listState: androidx.compose.foundation.lazy.LazyListState,
     scrollBehavior: TopAppBarScrollBehavior,
     bottomPadding: Dp,
+    firstRowFocusRequester: FocusRequester,
 ) {
     val navigator = LocalNavigator.current
     val pullRefreshState = rememberPullToRefreshState()
@@ -379,10 +385,15 @@ private fun SuperUserContent(
                 items = uiState.appGroupList,
                 key = { _, appGroup -> "${appGroup.uid}-${appGroup.profileKey}" },
                 contentType = { _, appGroup -> "${appGroup.uid}-${appGroup.profileKey}" },
-            ) { _, appGroup ->
+            ) { index, appGroup ->
                 AppGroupItem(
                     appGroup = appGroup,
                     isManager = appGroup.uid in uiState.managerUids,
+                    modifier = if (index == 0) {
+                        Modifier.focusRequester(firstRowFocusRequester)
+                    } else {
+                        Modifier
+                    },
                 ) {
                     navigator.push(Route.AppProfile(appGroup.uid, appGroup.profileKey))
                 }
@@ -489,10 +500,12 @@ private fun SuperUserDropdown(
 private fun AppGroupItem(
     appGroup: InstalledAppGroup,
     isManager: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val mainApp = appGroup.mainApp
     SettingsBaseWidget(
+        modifier = modifier,
         onClick = {
             onClick()
         },
