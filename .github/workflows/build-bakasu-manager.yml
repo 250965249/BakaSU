@@ -36,3 +36,33 @@ jobs:
         with:
           name: BakaSU-manager-debug
           path: manager/app/build/outputs/apk/debug/*.apk
+
+  manager-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./manager
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build release manager
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -PKSU_PACKAGE_NAME=com.resukisu.resukisu -PKSU_NAME=BakaSU
+
+      - name: Upload release manager APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: BakaSU-manager-release
+          path: manager/app/build/outputs/apk/release/*.apk
