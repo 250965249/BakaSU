@@ -923,6 +923,10 @@ void ksu_selinux_hide_handle_post_fs_data()
 
 void __init ksu_selinux_hide_init()
 {
+#ifdef CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT
+	pr_info("selinux_hide: disabled on Samsung NO_PATCH_TEXT build\n");
+	return;
+#endif
     if (ksu_register_feature_handler(&selinux_hide_handler)) {
         pr_err("Failed to register selinux_hide feature handler\n");
     }

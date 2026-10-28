@@ -28,6 +28,8 @@
 #include "selinux/selinux.h"
 #include "hook/setuid_hook.h"
 #include "compat/kernel_compat.h"
+#include "compat/samsung_defex.h"
+#include "ksu_samsung_kdp.h"
 #include "feature/shell_su_adb_only.h"
 #include "feature/sulog.h"
 #include "feature/adb_root.h"
@@ -228,13 +230,19 @@ int __init kernelsu_init(void)
     ksu_start_apatch_conflict_check();
 #endif
 
+    ksu_init_symbol_resolver();
+    if (ksu_samsung_kdp_init())
+        pr_warn("Samsung KDP init failed, using plain creds\n");
+
     ksu_cred = prepare_creds();
     if (!ksu_cred) {
         pr_err("prepare cred failed!\n");
         return -ENOSYS;
     }
 
-    ksu_init_symbol_resolver();
+    if (ksu_samsung_defex_init())
+        pr_warn("Samsung DEFEX init failed, continuing\n");
+
     ksu_selinux_init();
     ksu_feature_init();
     ksu_sulog_init();
@@ -326,6 +334,8 @@ void __exit kernelsu_exit(void)
 
     ksu_allowlist_exit();
 
+    ksu_samsung_defex_exit();
+
     ksu_shell_su_adb_only_exit();
     ksu_selinux_hide_exit();
     ksu_adb_root_exit();
@@ -333,7 +343,8 @@ void __exit kernelsu_exit(void)
     ksu_feature_exit();
     ksu_module_blacklist_exit();
 
-    put_cred(ksu_cred);
+    ksu_put_cred(ksu_cred);
+    ksu_samsung_kdp_exit();
 }
 
 #if NEED_OWN_STACKPROTECTOR

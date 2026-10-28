@@ -23,6 +23,7 @@
 #include "hook/setuid_hook.h"
 #include "hook/syscall_hook.h"
 #include "hook/syscall_event_bridge.h"
+#include "compat/samsung_rkp.h"
 #if defined(__riscv)
 #include "hook/riscv64/syscall_regs.h"
 #endif
@@ -155,10 +156,20 @@ aarch64_compat:
 }
 #endif
 
+static bool samsung_rkp_initialized;
+
 void __init ksu_syscall_hook_manager_init(void)
 {
     int ret;
     pr_info("hook_manager: ksu_hook_manager_init called\n");
+
+    if (ksu_dispatcher_nr < 0) {
+        ret = ksu_samsung_rkp_init();
+        if (ret)
+            pr_err("hook_manager: Samsung RKP fallback failed: %d\n", ret);
+        else
+            samsung_rkp_initialized = true;
+    }
 
 #ifdef CONFIG_KRETPROBES
     syscall_regfunc_rp = init_kretprobe("syscall_regfunc", syscall_regfunc_handler);
@@ -223,6 +234,11 @@ void __exit ksu_syscall_hook_manager_exit(void)
     ksu_unregister_compat_syscall_hook(ksu_get_compat_syscall_no(fstatat64));
     ksu_unregister_compat_syscall_hook(ksu_get_compat_syscall_no(faccessat));
 #endif
+
+    if (samsung_rkp_initialized) {
+        ksu_samsung_rkp_exit();
+        samsung_rkp_initialized = false;
+    }
 
     ksu_syscall_hook_exit();
 

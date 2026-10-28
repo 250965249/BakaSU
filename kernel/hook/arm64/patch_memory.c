@@ -345,6 +345,10 @@ static int ksu_patch_text_cb(void *arg)
 
 int ksu_patch_text(void *dst, void *src, size_t len, int flags)
 {
+#ifdef CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT
+	pr_warn_once("ksu_patch_text disabled on Samsung (RKP): dst=%px len=%zu\n", dst, len);
+	return -EOPNOTSUPP;
+#endif
     struct patch_text_info info = {
         .dst = dst,
         .src = src,

@@ -142,9 +142,9 @@ static_assert(1 == 0, "Unsupported architecture!");
 
 // Checks for UH, KDP and RKP
 #ifdef SAMSUNG_UH_DRIVER_EXIST
-#if defined(CONFIG_UH) || defined(CONFIG_KDP) || defined(CONFIG_RKP)
+#if (defined(CONFIG_UH) || defined(CONFIG_KDP) || defined(CONFIG_RKP)) && !defined(CONFIG_KSU_SAMSUNG_KDP)
 #error                                                                                                                 \
-    "CONFIG_UH, CONFIG_KDP and CONFIG_RKP is enabled! Please disable or remove it before compile a kernel with KernelSU!"
+    "CONFIG_UH, CONFIG_KDP and CONFIG_RKP is enabled! Enable CONFIG_KSU_SAMSUNG_KDP or remove them before compiling KernelSU!"
 #endif
 #endif
 

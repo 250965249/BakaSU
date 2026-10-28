@@ -1,4 +1,7 @@
 kernelsu-objs := core/init.o
+kernelsu-objs += compat/samsung_kdp.o
+kernelsu-objs += compat/samsung_defex.o
+kernelsu-objs += compat/samsung_rkp.o
 kernelsu-objs += policy/allowlist.o
 kernelsu-objs += policy/app_profile.o
 kernelsu-objs += policy/feature.o
@@ -39,6 +42,19 @@ kernelsu-objs += supercall/supercall.o
 
 ifdef CONFIG_ARM64
 kernelsu-objs += compat/apatch_conflict.o
+endif
+
+ifdef CONFIG_KSU_SAMSUNG_KDP
+ccflags-y += -DCONFIG_KSU_SAMSUNG_KDP=1
+endif
+ifdef CONFIG_KSU_SAMSUNG_RKP
+ccflags-y += -DCONFIG_KSU_SAMSUNG_RKP=1
+endif
+ifdef CONFIG_KSU_SAMSUNG_DEFEX
+ccflags-y += -DCONFIG_KSU_SAMSUNG_DEFEX=1
+endif
+ifdef CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT
+ccflags-y += -DCONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=1
 endif
 
 ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-missing-prototypes

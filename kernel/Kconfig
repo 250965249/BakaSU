@@ -8,6 +8,34 @@ config KSU
 		Enable kernel-level root privileges on Android System.
 		Choose "m" here to build KernelSU as LKM
 
+config KSU_SAMSUNG_KDP
+	bool "Samsung KDP credential compatibility"
+	depends on KSU && ARM64
+	default y
+	help
+	  Use Samsung KDP prepare_ro_creds/kdp_assign_pgd credential handling.
+
+config KSU_SAMSUNG_RKP
+	bool "Samsung RKP syscall kprobe fallback"
+	depends on KSU && ARM64 && KPROBES && KRETPROBES
+	default y
+	help
+	  Use kprobes instead of patching the RKP-protected syscall table.
+
+config KSU_SAMSUNG_DEFEX
+	bool "Samsung DEFEX compatibility"
+	depends on KSU && ARM64
+	default y
+	help
+	  Sync DEFEX task creds and bypass DEFEX enforcement for KSU tasks.
+
+config KSU_SAMSUNG_NO_PATCH_TEXT
+	bool "Disable text/rodata patching on Samsung"
+	depends on KSU && ARM64
+	default y
+	help
+	  Refuse ksu_patch_text() so Knox RKP never sees a text patch.
+
 config KSU_DEBUG
 	  bool "KernelSU debug mode"
 	  depends on KSU

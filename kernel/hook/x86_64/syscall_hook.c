@@ -65,24 +65,31 @@ static int patch_syscall_table(int nr, sys_call_ptr_t fn)
 
 // Direct syscall table patching: overwrite syscall_table[nr] with fn,
 // save original to *old, and record for restoration at module exit.
-void ksu_syscall_table_hook(int nr, sys_call_ptr_t fn, sys_call_ptr_t *old)
+int ksu_syscall_table_hook(int nr, sys_call_ptr_t fn, sys_call_ptr_t *old)
 {
+    sys_call_ptr_t orig;
+    int i, ret;
+    bool found = false;
+
     if (ksu_syscall_table == NULL)
-        return;
+        return -ENOENT;
     if (nr < 0 || nr >= __NR_syscalls) {
         pr_info("invalid nr: %d\n", nr);
-        return;
+        return -EINVAL;
     }
 
     mutex_lock(&hooked_entries_lock);
 
-    sys_call_ptr_t orig = READ_ONCE(ksu_syscall_table[nr]);
+    orig = READ_ONCE(ksu_syscall_table[nr]);
     if (old)
         *old = orig;
 
-    // Record for later restoration
-    int i;
-    bool found = false;
+    ret = patch_syscall_table(nr, fn);
+    if (ret) {
+        mutex_unlock(&hooked_entries_lock);
+        return ret;
+    }
+
     for (i = 0; i < hooked_count; i++) {
         if (hooked_entries[i].nr == nr) {
             found = true;
@@ -99,9 +106,8 @@ void ksu_syscall_table_hook(int nr, sys_call_ptr_t fn, sys_call_ptr_t *old)
         }
     }
 
-    patch_syscall_table(nr, fn);
-
     mutex_unlock(&hooked_entries_lock);
+    return 0;
 }
 
 // Restore syscall_table[nr] to its original value and remove from tracking list.
@@ -336,8 +342,12 @@ void __init __nocfi ksu_syscall_hook_init(void)
     }
 
     ksu_dispatcher_nr = ni_slot;
-    ksu_syscall_table_hook(ksu_dispatcher_nr, (sys_call_ptr_t)ksu_syscall_dispatcher, NULL);
-    pr_info("dispatcher installed at slot %d\n", ksu_dispatcher_nr);
+    if (ksu_syscall_table_hook(ksu_dispatcher_nr, (sys_call_ptr_t)ksu_syscall_dispatcher, NULL)) {
+        pr_err("failed to install dispatcher at slot %d\n", ksu_dispatcher_nr);
+        ksu_dispatcher_nr = -1;
+    } else {
+        pr_info("dispatcher installed at slot %d\n", ksu_dispatcher_nr);
+    }
 }
 
 void __exit ksu_syscall_hook_exit(void)
@@ -427,9 +437,49 @@ bool ksu_has_compat_syscall_hook(int nr)
 // Saves the original handler to *@old (if non-NULL) and records the entry
 // for restoration at module exit. Use this for boot-time hooks that replace
 // a real syscall entry (e.g. ksud hooking __NR_execve/__NR_read/__NR_fstat).
-void ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
+int ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
 {
-    // do nothing
+    syscall_fn_t orig;
+    int i, ret;
+    bool found = false;
+
+    if (ksu_compat_syscall_table == NULL)
+        return -ENOENT;
+    if (nr < 0 || nr >= __NR_compat_syscalls) {
+        pr_info("invalid nr: %d\n", nr);
+        return -EINVAL;
+    }
+
+    mutex_lock(&hooked_entries_lock);
+
+    orig = READ_ONCE(ksu_compat_syscall_table[nr]);
+    if (old)
+        *old = orig;
+
+    ret = patch_syscall_table(nr, fn);
+    if (ret) {
+        mutex_unlock(&hooked_entries_lock);
+        return ret;
+    }
+
+    for (i = 0; i < compat_hooked_count; i++) {
+        if (hooked_compat_entries[i].nr == nr) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        if (compat_hooked_count < ARRAY_SIZE(hooked_compat_entries)) {
+            hooked_compat_entries[compat_hooked_count].nr = nr;
+            hooked_compat_entries[compat_hooked_count].orig = orig;
+            compat_hooked_count++;
+        } else {
+            pr_warn("hooked_compat_entries full, cannot track syscall %d for restoration\n", nr);
+        }
+    }
+
+    mutex_unlock(&hooked_entries_lock);
+    return 0;
 }
 
 void ksu_compat_syscall_table_unhook(int nr)

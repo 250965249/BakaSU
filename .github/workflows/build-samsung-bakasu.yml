@@ -1,0 +1,31 @@
+name: Build BakaSU Samsung ksud
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - samsung
+
+jobs:
+  lkm-arm64:
+    uses: ./.github/workflows/ddk-lkm.yml
+    with:
+      kmi: android15-6.6
+      arch: arm64
+
+  lkm-x86_64:
+    uses: ./.github/workflows/ddk-lkm.yml
+    with:
+      kmi: android15-6.6
+      arch: x86_64
+
+  ksuinit:
+    uses: ./.github/workflows/ksuinit.yml
+
+  ksud:
+    needs: [lkm-arm64, lkm-x86_64, ksuinit]
+    uses: ./.github/workflows/ksud.yml
+    with:
+      target: aarch64-linux-android
+      pack_lkm: true
+      pack_ksuinit: true

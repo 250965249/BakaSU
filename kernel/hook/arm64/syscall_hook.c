@@ -99,24 +99,31 @@ static int patch_compat_syscall_table(int nr, syscall_fn_t fn)
 
 // Direct syscall table patching: overwrite syscall_table[nr] with fn,
 // save original to *old, and record for restoration at module exit.
-void ksu_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
+int ksu_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
 {
+    syscall_fn_t orig;
+    int i, ret;
+    bool found = false;
+
     if (ksu_syscall_table == NULL)
-        return;
+        return -ENOENT;
     if (nr < 0 || nr >= __NR_syscalls) {
         pr_info("invalid nr: %d\n", nr);
-        return;
+        return -EINVAL;
     }
 
     mutex_lock(&hooked_entries_lock);
 
-    syscall_fn_t orig = READ_ONCE(ksu_syscall_table[nr]);
+    orig = READ_ONCE(ksu_syscall_table[nr]);
     if (old)
         *old = orig;
 
-    // Record for later restoration
-    int i;
-    bool found = false;
+    ret = patch_syscall_table(nr, fn);
+    if (ret) {
+        mutex_unlock(&hooked_entries_lock);
+        return ret;
+    }
+
     for (i = 0; i < hooked_count; i++) {
         if (hooked_entries[i].nr == nr) {
             found = true;
@@ -133,32 +140,38 @@ void ksu_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
         }
     }
 
-    patch_syscall_table(nr, fn);
-
     mutex_unlock(&hooked_entries_lock);
+    return 0;
 }
 
 #ifdef CONFIG_COMPAT
 // Direct syscall table patching: overwrite compat_syscall_table[nr] with fn,
 // save original to *old, and record for restoration at module exit.
-void ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
+int ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
 {
+    syscall_fn_t orig;
+    int i, ret;
+    bool found = false;
+
     if (ksu_compat_syscall_table == NULL)
-        return;
+        return -ENOENT;
     if (nr < 0 || nr >= __NR_compat_syscalls) {
         pr_info("invalid nr: %d\n", nr);
-        return;
+        return -EINVAL;
     }
 
     mutex_lock(&hooked_entries_lock);
 
-    syscall_fn_t orig = READ_ONCE(ksu_compat_syscall_table[nr]);
+    orig = READ_ONCE(ksu_compat_syscall_table[nr]);
     if (old)
         *old = orig;
 
-    // Record for later restoration
-    int i;
-    bool found = false;
+    ret = patch_syscall_table(nr, fn);
+    if (ret) {
+        mutex_unlock(&hooked_entries_lock);
+        return ret;
+    }
+
     for (i = 0; i < compat_hooked_count; i++) {
         if (hooked_compat_entries[i].nr == nr) {
             found = true;
@@ -175,9 +188,8 @@ void ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
         }
     }
 
-    patch_compat_syscall_table(nr, fn);
-
     mutex_unlock(&hooked_entries_lock);
+    return 0;
 }
 #endif
 
@@ -446,8 +458,12 @@ void __init ksu_syscall_hook_init(void)
     }
 
     ksu_dispatcher_nr = ni_slot;
-    ksu_syscall_table_hook(ksu_dispatcher_nr, (syscall_fn_t)ksu_syscall_dispatcher, NULL);
-    pr_info("dispatcher installed at slot %d\n", ksu_dispatcher_nr);
+    if (ksu_syscall_table_hook(ksu_dispatcher_nr, (syscall_fn_t)ksu_syscall_dispatcher, NULL)) {
+        pr_err("failed to install dispatcher at slot %d\n", ksu_dispatcher_nr);
+        ksu_dispatcher_nr = -1;
+    } else {
+        pr_info("dispatcher installed at slot %d\n", ksu_dispatcher_nr);
+    }
 #ifdef CONFIG_COMPAT
 init_compat_dispatcher:
     memset(compat_syscall_hooks, 0, sizeof(compat_syscall_hooks));
@@ -465,8 +481,12 @@ init_compat_dispatcher:
     }
 
     ksu_compat_dispatcher_nr = ni_slot;
-    ksu_compat_syscall_table_hook(ksu_compat_dispatcher_nr, (syscall_fn_t)ksu_syscall_dispatcher, NULL);
-    pr_info("compat dispatcher installed at slot %d\n", ksu_compat_dispatcher_nr);
+    if (ksu_compat_syscall_table_hook(ksu_compat_dispatcher_nr, (syscall_fn_t)ksu_syscall_dispatcher, NULL)) {
+        pr_err("failed to install compat dispatcher at slot %d\n", ksu_compat_dispatcher_nr);
+        ksu_compat_dispatcher_nr = -1;
+    } else {
+        pr_info("compat dispatcher installed at slot %d\n", ksu_compat_dispatcher_nr);
+    }
 #endif
 }
 
