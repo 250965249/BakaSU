@@ -30,8 +30,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/Baka-SU/BakaSU.git
           git fetch upstream main
-          git merge --no-edit upstream/main
-          git push origin HEAD:samsung
+          if git merge --no-edit upstream/main; then
+            git push origin HEAD:samsung
+          else
+            git merge --abort
+            echo "::warning::Upstream merge has conflicts; building the current samsung branch instead."
+          fi
 
   build-lkm:
     needs: sync
