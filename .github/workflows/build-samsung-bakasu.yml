@@ -12,12 +12,16 @@ jobs:
     with:
       kmi: android15-6.6
       arch: arm64
+      expected_pr_build_size: "0x393"
+      expected_pr_build_hash: "8113db5e7d0b0de1a4635236a477083c85aeb94088595eee4c89705cf4cdab23"
 
   lkm-x86_64:
     uses: ./.github/workflows/ddk-lkm.yml
     with:
       kmi: android15-6.6
       arch: x86_64
+      expected_pr_build_size: "0x393"
+      expected_pr_build_hash: "8113db5e7d0b0de1a4635236a477083c85aeb94088595eee4c89705cf4cdab23"
 
   ksuinit:
     uses: ./.github/workflows/ksuinit.yml
