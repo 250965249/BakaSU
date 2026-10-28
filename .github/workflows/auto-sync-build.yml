@@ -1,0 +1,77 @@
+name: Auto Sync & Build BakaSU Samsung ksud
+
+# Scheduled upstream sync + all-KMI Samsung LKM build + aarch64 ksud release.
+# The released `ksud-bakasu-aarch64` is consumed by GhostSam's auto-build workflow.
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 02:00 Asia/Shanghai
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bakasu-auto-sync-build
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: samsung
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream BakaSU main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/Baka-SU/BakaSU.git
+          git fetch upstream main
+          git merge --no-edit upstream/main
+          git push origin HEAD:samsung
+
+  build-lkm:
+    needs: sync
+    uses: ./.github/workflows/build-lkm.yml
+    with:
+      expected_pr_build_size: "0x393"
+      expected_pr_build_hash: "8113db5e7d0b0de1a4635236a477083c85aeb94088595eee4c89705cf4cdab23"
+
+  build-ksuinit:
+    needs: sync
+    uses: ./.github/workflows/ksuinit.yml
+
+  build-ksud:
+    needs: [build-lkm, build-ksuinit]
+    uses: ./.github/workflows/ksud.yml
+    with:
+      target: aarch64-linux-android
+      pack_lkm: true
+      pack_ksuinit: true
+
+  release:
+    needs: build-ksud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ksud artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ksud-aarch64-linux-android
+          path: ksud-artifact
+
+      - name: Publish latest-ksud release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ksud="$(find ksud-artifact -type f -name ksud | head -n1)"
+          test -n "$ksud"
+          cp "$ksud" ksud-bakasu-aarch64
+          chmod +x ksud-bakasu-aarch64
+          if ! gh release view latest-ksud >/dev/null 2>&1; then
+            gh release create latest-ksud --title "BakaSU Samsung ksud (latest)" \
+              --notes "Automated all-KMI Samsung build from the samsung branch."
+          fi
+          gh release upload latest-ksud ksud-bakasu-aarch64 --clobber
