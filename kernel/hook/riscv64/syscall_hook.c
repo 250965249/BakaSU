@@ -309,47 +309,10 @@ bool ksu_has_compat_syscall_hook(int nr)
 // a real syscall entry (e.g. ksud hooking __NR_execve/__NR_read/__NR_fstat).
 int ksu_compat_syscall_table_hook(int nr, syscall_fn_t fn, syscall_fn_t *old)
 {
-    syscall_fn_t orig;
-    int i, ret;
-    bool found = false;
-
-    if (ksu_compat_syscall_table == NULL)
-        return -ENOENT;
-    if (nr < 0 || nr >= __NR_compat_syscalls) {
-        pr_info("invalid nr: %d\n", nr);
-        return -EINVAL;
-    }
-
-    mutex_lock(&hooked_entries_lock);
-
-    orig = READ_ONCE(ksu_compat_syscall_table[nr]);
-    if (old)
-        *old = orig;
-
-    ret = patch_syscall_table(nr, fn);
-    if (ret) {
-        mutex_unlock(&hooked_entries_lock);
-        return ret;
-    }
-
-    for (i = 0; i < compat_hooked_count; i++) {
-        if (hooked_compat_entries[i].nr == nr) {
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        if (compat_hooked_count < ARRAY_SIZE(hooked_compat_entries)) {
-            hooked_compat_entries[compat_hooked_count].nr = nr;
-            hooked_compat_entries[compat_hooked_count].orig = orig;
-            compat_hooked_count++;
-        } else {
-            pr_warn("hooked_compat_entries full, cannot track syscall %d for restoration\n", nr);
-        }
-    }
-
-    mutex_unlock(&hooked_entries_lock);
-    return 0;
+    (void)nr;
+    (void)fn;
+    (void)old;
+    return -EOPNOTSUPP;
 }
 
 void ksu_compat_syscall_table_unhook(int nr)

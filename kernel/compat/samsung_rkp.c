@@ -99,12 +99,21 @@ static int execveat_pre(struct kprobe *probe, struct pt_regs *regs)
 	return 1;
 }
 
+static bool samsung_su_compat_enabled(void)
+{
+#ifdef KSU_COMPAT_USE_STATIC_KEY
+	return static_branch_unlikely(&ksu_su_compat_enabled);
+#else
+	return READ_ONCE(ksu_su_compat_enabled);
+#endif
+}
+
 static int newfstatat_pre(struct kprobe *probe, struct pt_regs *regs)
 {
 	(void)probe;
 	if (consume_bypass(__NR_newfstatat))
 		return 0;
-	if (!READ_ONCE(ksu_su_compat_enabled) ||
+	if (!samsung_su_compat_enabled() ||
 	    !ksu_is_allow_uid_for_current(current_uid().val))
 		return 0;
 	instruction_pointer_set(regs, (unsigned long)samsung_newfstatat);
@@ -116,7 +125,7 @@ static int faccessat_pre(struct kprobe *probe, struct pt_regs *regs)
 	(void)probe;
 	if (consume_bypass(__NR_faccessat))
 		return 0;
-	if (!READ_ONCE(ksu_su_compat_enabled) ||
+	if (!samsung_su_compat_enabled() ||
 	    !ksu_is_allow_uid_for_current(current_uid().val))
 		return 0;
 	instruction_pointer_set(regs, (unsigned long)samsung_faccessat);
