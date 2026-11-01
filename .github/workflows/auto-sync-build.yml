@@ -33,6 +33,9 @@ env:
   UPSTREAM_REF: main
   # From userspace/ksud/build.rs: VERSION_CODE = 30700 + `git rev-list --count HEAD`
   VERSION_CODE_OFFSET: "30700"
+  # Empty = the stamp is derived from git. Set "<code>:<name>" only for a
+  # variant whose build.rs pins the stamp.
+  EXPECTED_STAMP: ""
 
 jobs:
   sync:
@@ -150,17 +153,27 @@ jobs:
           # tag. Drop every non-version tag locally so the stamp matches upstream.
           git tag -l | grep -Ev '^v[0-9]' | xargs -r git tag -d >/dev/null || true
 
+          git_version_name=$(git describe --tags --always | sed 's/^v//')
           version_code=$(( VERSION_CODE_OFFSET + $(git rev-list --count HEAD) ))
-          version_name=$(git describe --tags --always | sed 's/^v//')
+          version_name="$git_version_name"
+          version_pinned=false
+          if [ -n "${EXPECTED_STAMP:-}" ]; then
+            # This variant's build.rs pins the stamp, so git cannot name it.
+            # The git identity is still recorded in the sidecar below.
+            version_code=${EXPECTED_STAMP%%:*}
+            version_name=${EXPECTED_STAMP#*:}
+            version_pinned=true
+          fi
 
           # The binary is the authority: it must agree with the tree we publish.
           embedded_code=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}' "$bin" | head -n1 | sed 's/KSU_NO_NEW_PRIVS//')
           embedded_name=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}[0-9A-Za-z._:+~-]+' "$bin" | head -n1 | sed -E 's/^KSU_NO_NEW_PRIVS[0-9]{5}//')
-          echo "HEAD implies code=$version_code name=$version_name"
+          echo "tree implies   code=$version_code name=$version_name (git=$git_version_name pinned=$version_pinned)"
           echo "binary stamps  code=$embedded_code name=$embedded_name"
 
-          if [ "$embedded_code" != "$version_code" ]; then
-            echo "::error::built ksud reports version code $embedded_code but HEAD implies $version_code - the build did not use the synced tree"
+          if [ "$embedded_code" != "$version_code" ] || [ "$embedded_name" != "$version_name" ]; then
+            echo "::error::built ksud stamps code=$embedded_code name=$embedded_name but this tree implies code=$version_code name=$version_name"
+            echo "::error::either the build did not use the synced tree, or the version pin in userspace/ksud/build.rs changed (update EXPECTED_STAMP)"
             exit 1
           fi
           case "$embedded_name" in
@@ -177,6 +190,8 @@ jobs:
           commit=$(git rev-parse HEAD)
           commit_short=$(git rev-parse --short=8 HEAD)
           built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          version_pinned=$version_pinned
+          git_version_name=$git_version_name
           behind_upstream=${{ needs.sync.outputs.behind }}
           upstream_commit=${{ needs.sync.outputs.upstream_commit }}
           upstream_version_name=${{ needs.sync.outputs.upstream_version_name }}
