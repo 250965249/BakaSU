@@ -30,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Download artifacts
@@ -81,6 +82,14 @@ jobs:
           clang --target=aarch64-linux-gnu -c -nostdlib \
             -o userspace/ksud/.lkm_image_bootstrap.o \
             userspace/ksud/src/lkm_image_bootstrap.S
+
+      - name: Normalize tags for version stamping
+        run: |
+          # Fork release tags (`latest-ksud`, `manager-ci`) sit on HEAD, and
+          # `git describe --tags` always prefers the nearest tag, which turned ksud's
+          # VERSION_NAME into `latest-ksud-6-g4f74a450`. Keeping only real version
+          # tags makes the stamp match upstream CI's naming.
+          git tag -l | grep -Ev '^v[0-9]' | xargs -r git tag -d >/dev/null || true
 
       - name: Build ksud
         run: |

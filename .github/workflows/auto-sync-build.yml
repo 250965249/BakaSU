@@ -1,7 +1,19 @@
 name: Auto Sync & Build BakaSU Samsung ksud
 
 # Scheduled upstream sync + all-KMI Samsung LKM build + aarch64 ksud release.
-# The released `ksud-bakasu-aarch64` is consumed by GhostSam's auto-build workflow.
+#
+# The released `ksud-bakasu-aarch64` (plus its `ksud-bakasu-aarch64.version`
+# sidecar) is consumed by GhostSam's auto-build workflow. Three things here are
+# load-bearing for that consumer:
+#
+#   1. The merge result is pushed *and* the build jobs check out the branch tip,
+#      not `github.sha` (which is frozen at run-creation time, i.e. before the
+#      merge). Without that, every run published the previous run's tree.
+#   2. Fork release tags (`latest-ksud`) are dropped before any `git describe`,
+#      otherwise ksud stamps VERSION_NAME as `latest-ksud-1-gb8f9d24f` instead
+#      of a real version tag.
+#   3. A merge conflict no longer silently ships stale code: the run goes red
+#      after publishing, with the conflicting paths in the annotation.
 on:
   schedule:
     - cron: "0 18 * * *"   # 02:00 Asia/Shanghai
@@ -14,10 +26,34 @@ concurrency:
   group: bakasu-auto-sync-build
   cancel-in-progress: false
 
+env:
+  BRANCH: samsung
+  VARIANT: bakasu
+  UPSTREAM_REPO: https://github.com/Baka-SU/BakaSU.git
+  UPSTREAM_REF: main
+  # From userspace/ksud/build.rs: VERSION_CODE = 30700 + `git rev-list --count HEAD`
+  VERSION_CODE_OFFSET: "30700"
+
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.merge.outputs.sha }}
+      behind: ${{ steps.merge.outputs.behind }}
+      conflict: ${{ steps.merge.outputs.conflict }}
+      upstream_commit: ${{ steps.merge.outputs.upstream_commit }}
+      upstream_version_name: ${{ steps.merge.outputs.upstream_version_name }}
     steps:
+      - name: Assert branch
+        run: |
+          # Scheduled runs use the repository default branch; every job below
+          # checks out `${{ github.ref_name }}`, so anything else would build a
+          # tree different from the one that was just merged.
+          if [ "${{ github.ref_name }}" != "$BRANCH" ]; then
+            echo "::error::expected to run on '$BRANCH', got '${{ github.ref_name }}'"
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
         with:
           ref: samsung
@@ -25,17 +61,44 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Merge upstream BakaSU main
+        id: merge
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/Baka-SU/BakaSU.git
-          git fetch upstream main
-          if git merge --no-edit upstream/main; then
-            git push origin HEAD:samsung
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch upstream "$UPSTREAM_REF" --tags --force
+
+          upstream_commit=$(git rev-parse --short=8 "upstream/$UPSTREAM_REF")
+          upstream_version_name=$(git describe --tags --always "upstream/$UPSTREAM_REF" | sed 's/^v//')
+          behind_before=$(git rev-list --count "HEAD..upstream/$UPSTREAM_REF")
+          echo "::notice::upstream/$UPSTREAM_REF = $upstream_version_name ($upstream_commit), $behind_before commit(s) ahead of us"
+
+          conflict=false
+          if [ "$behind_before" -eq 0 ]; then
+            echo "::notice::already up to date with upstream/$UPSTREAM_REF"
+          elif git merge --no-edit "upstream/$UPSTREAM_REF"; then
+            echo "::notice::merged $behind_before upstream commit(s)"
           else
+            files=$(git diff --name-only --diff-filter=U | paste -sd' ' -)
             git merge --abort
-            echo "::warning::Upstream merge has conflicts; building the current samsung branch instead."
+            conflict=true
+            echo "::error::upstream merge conflicts in: ${files:-<unknown>} - the samsung branch cannot advance until these are resolved by hand; this run publishes a payload that is $behind_before commit(s) behind $upstream_version_name"
           fi
+
+          # Keep the fork's tags in sync so `git describe` inside the build jobs
+          # (which clone from origin) can see upstream version tags.
+          git push origin "HEAD:$BRANCH"
+          git push origin --tags || echo "::warning::could not push tags"
+
+          behind_after=$(git rev-list --count "HEAD..upstream/$UPSTREAM_REF" 2>/dev/null || echo "$behind_before")
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "behind=$behind_after"
+            echo "conflict=$conflict"
+            echo "upstream_commit=$upstream_commit"
+            echo "upstream_version_name=$upstream_version_name"
+          } >> "$GITHUB_OUTPUT"
 
   build-lkm:
     needs: sync
@@ -57,10 +120,14 @@ jobs:
       pack_ksuinit: true
 
   release:
-    needs: build-ksud
+    needs: [sync, build-ksud]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
       - name: Download ksud artifact
         uses: actions/download-artifact@v7
         with:
@@ -71,12 +138,64 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           ksud="$(find ksud-artifact -type f -name ksud | head -n1)"
           test -n "$ksud"
-          cp "$ksud" ksud-bakasu-aarch64
-          chmod +x ksud-bakasu-aarch64
+          bin="ksud-${VARIANT}-aarch64"
+          cp "$ksud" "$bin"
+          chmod +x "$bin"
+
+          # `gh release create latest-ksud` puts a `latest-ksud` tag on HEAD, and
+          # `git describe --tags` prefers any tag over walking back to a version
+          # tag. Drop every non-version tag locally so the stamp matches upstream.
+          git tag -l | grep -Ev '^v[0-9]' | xargs -r git tag -d >/dev/null || true
+
+          version_code=$(( VERSION_CODE_OFFSET + $(git rev-list --count HEAD) ))
+          version_name=$(git describe --tags --always | sed 's/^v//')
+
+          # The binary is the authority: it must agree with the tree we publish.
+          embedded_code=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}' "$bin" | head -n1 | sed 's/KSU_NO_NEW_PRIVS//')
+          embedded_name=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}[0-9A-Za-z._:+~-]+' "$bin" | head -n1 | sed -E 's/^KSU_NO_NEW_PRIVS[0-9]{5}//')
+          echo "HEAD implies code=$version_code name=$version_name"
+          echo "binary stamps  code=$embedded_code name=$embedded_name"
+
+          if [ "$embedded_code" != "$version_code" ]; then
+            echo "::error::built ksud reports version code $embedded_code but HEAD implies $version_code - the build did not use the synced tree"
+            exit 1
+          fi
+          case "$embedded_name" in
+            latest-*|manager-ci*)
+              echo "::error::ksud VERSION_NAME is still '$embedded_name' - a fork release tag leaked into git describe"
+              exit 1
+              ;;
+          esac
+
+          cat > "${bin}.version" <<EOF
+          variant=$VARIANT
+          version_code=$embedded_code
+          version_name=$embedded_name
+          commit=$(git rev-parse HEAD)
+          commit_short=$(git rev-parse --short=8 HEAD)
+          built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          behind_upstream=${{ needs.sync.outputs.behind }}
+          upstream_commit=${{ needs.sync.outputs.upstream_commit }}
+          upstream_version_name=${{ needs.sync.outputs.upstream_version_name }}
+          sha256=$(sha256sum "$bin" | cut -d' ' -f1)
+          EOF
+          echo "--- ${bin}.version ---"
+          cat "${bin}.version"
+
           if ! gh release view latest-ksud >/dev/null 2>&1; then
             gh release create latest-ksud --title "BakaSU Samsung ksud (latest)" \
               --notes "Automated all-KMI Samsung build from the samsung branch."
           fi
-          gh release upload latest-ksud ksud-bakasu-aarch64 --clobber
+          gh release upload latest-ksud "$bin" "${bin}.version" --clobber
+          echo "::notice::published $bin ($embedded_name)"
+
+      # Publish first, then go red - silently withholding the asset hides the
+      # breakage from the GhostSam build, which is how the payload froze.
+      - name: Fail when the payload is behind upstream
+        if: ${{ needs.sync.outputs.behind != '0' || needs.sync.outputs.conflict == 'true' }}
+        run: |
+          echo "::error::published a ksud that is ${{ needs.sync.outputs.behind }} commit(s) behind ${{ needs.sync.outputs.upstream_version_name }} (merge_conflict=${{ needs.sync.outputs.conflict }}). Resolve the conflict on the samsung branch."
+          exit 1
