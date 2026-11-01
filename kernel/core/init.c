@@ -172,6 +172,8 @@ MODULE_PARM_DESC(block_modules, "Comma-separated preset module names to acknowle
 
 int __init kernelsu_init(void)
 {
+    int ret;
+
     // clang-format off
     
     // ddk in x86-64 doesn't have generated/compile.h
@@ -230,6 +232,7 @@ int __init kernelsu_init(void)
     ksu_start_apatch_conflict_check();
 #endif
 
+    pr_info("initializing symbol resolver\n");
     ksu_init_symbol_resolver();
     if (ksu_samsung_kdp_init())
         pr_warn("Samsung KDP init failed, using plain creds\n");
@@ -242,6 +245,13 @@ int __init kernelsu_init(void)
 
     if (ksu_samsung_defex_init())
         pr_warn("Samsung DEFEX init failed, continuing\n");
+
+    ret = ksu_selinux_inode_init();
+    if (ret) {
+        put_cred(ksu_cred);
+        ksu_cred = NULL;
+        return ret;
+    }
 
     ksu_selinux_init();
     ksu_feature_init();
