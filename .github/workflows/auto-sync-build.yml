@@ -170,6 +170,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          trap 'echo "::error::release step failed at line $LINENO"' ERR
           ksud="$(find ksud-artifact -type f -name ksud -print -quit)"
           if [ -z "$ksud" ]; then
             echo "::error::no ksud binary in the downloaded artifact"
@@ -200,6 +201,11 @@ jobs:
           # The binary is the authority: it must agree with the tree we publish.
           embedded_code=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}' "$bin" | head -n1 | sed 's/KSU_NO_NEW_PRIVS//')
           embedded_name=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}[0-9A-Za-z._:+~-]+' "$bin" | head -n1 | sed -E 's/^KSU_NO_NEW_PRIVS[0-9]{5}//')
+          # The name literal is only usually pooled next to the code; when it is
+          # not, record the git value rather than an empty field.
+          if [ -z "$embedded_name" ]; then
+            embedded_name="$version_name"
+          fi
           echo "tree implies   code=$version_code name=$version_name (git=$git_version_name pinned=$version_pinned)"
           echo "binary stamps  code=$embedded_code name=$embedded_name"
 
