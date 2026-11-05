@@ -170,8 +170,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          ksud="$(find ksud-artifact -type f -name ksud | head -n1)"
-          test -n "$ksud"
+          ksud="$(find ksud-artifact -type f -name ksud -print -quit)"
+          if [ -z "$ksud" ]; then
+            echo "::error::no ksud binary in the downloaded artifact"
+            find ksud-artifact -maxdepth 3 -type f -exec ls -l {} \; || true
+            exit 1
+          fi
           bin="ksud-${VARIANT}-aarch64"
           cp "$ksud" "$bin"
           chmod +x "$bin"
