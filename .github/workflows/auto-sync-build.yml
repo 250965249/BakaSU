@@ -233,7 +233,12 @@ jobs:
             gh release create latest-ksud --title "BakaSU Samsung ksud (latest)" \
               --notes "Automated all-KMI Samsung build from the samsung branch."
           fi
-          gh release upload latest-ksud "$bin" "${bin}.version" --clobber
+          # `--clobber` races on an existing asset name (HTTP 422
+          # "ReleaseAsset.name already exists"). Delete first, then upload.
+          for a in "$bin" "${bin}.version"; do
+            gh release delete-asset latest-ksud "$a" --yes >/dev/null 2>&1 || true
+          done
+          gh release upload latest-ksud "$bin" "${bin}.version"
           echo "::notice::published $bin ($embedded_name)"
 
       # Publish first, then go red - silently withholding the asset hides the
