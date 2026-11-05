@@ -203,9 +203,18 @@ jobs:
           echo "tree implies   code=$version_code name=$version_name (git=$git_version_name pinned=$version_pinned)"
           echo "binary stamps  code=$embedded_code name=$embedded_name"
 
-          if [ "$embedded_code" != "$version_code" ] || [ "$embedded_name" != "$version_name" ]; then
-            echo "::error::built ksud stamps code=$embedded_code name=$embedded_name but this tree implies code=$version_code name=$version_name"
-            echo "::error::either the build did not use the synced tree, or the version pin in userspace/ksud/build.rs changed (update EXPECTED_STAMP)"
+          # The code is OFFSET + `git rev-list --count HEAD`, a solid fingerprint
+          # of the tree the binary came from - enforce it strictly. The name
+          # literal is only *usually* laid out right next to it, so enforce the
+          # name only when the binary actually exposes one.
+          if [ "$embedded_code" != "$version_code" ]; then
+            echo "::error::built ksud stamps code=$embedded_code but this tree implies $version_code - the build did not use the synced tree (or the pin in userspace/ksud/build.rs changed; update EXPECTED_STAMP)"
+            exit 1
+          fi
+          if [ -z "$embedded_name" ]; then
+            echo "::notice::binary carries no readable VERSION_NAME next to its code; using the git value ($version_name)"
+          elif [ "$embedded_name" != "$version_name" ]; then
+            echo "::error::built ksud stamps name=$embedded_name but this tree implies $version_name"
             exit 1
           fi
           case "$embedded_name" in
