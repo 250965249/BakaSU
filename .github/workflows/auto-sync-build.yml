@@ -28,6 +28,9 @@ concurrency:
 
 env:
   BRANCH: samsung
+  # Files the samsung delta owns. A conflict confined to these is
+  # auto-resolved in our favour; anything else fails loudly.
+  SAMSUNG_OWNED: "kernel/core/init.c kernel/Kbuild kernel/Kconfig kernel/hook/arm64/patch_memory.c kernel/hook/arm64/syscall_hook.c kernel/hook/x86_64/syscall_hook.c kernel/hook/syscall_hook.h kernel/hook/syscall_hook_manager.c kernel/hook/tp_marker.c kernel/feature/selinux_hide.c kernel/policy/app_profile.c"
   VARIANT: bakasu
   UPSTREAM_REPO: https://github.com/Baka-SU/BakaSU.git
   UPSTREAM_REF: main
@@ -44,6 +47,7 @@ jobs:
       sha: ${{ steps.merge.outputs.sha }}
       behind: ${{ steps.merge.outputs.behind }}
       conflict: ${{ steps.merge.outputs.conflict }}
+      auto_resolved: ${{ steps.merge.outputs.auto_resolved }}
       upstream_commit: ${{ steps.merge.outputs.upstream_commit }}
       upstream_version_name: ${{ steps.merge.outputs.upstream_version_name }}
     steps:
@@ -78,15 +82,38 @@ jobs:
           echo "::notice::upstream/$UPSTREAM_REF = $upstream_version_name ($upstream_commit), $behind_before commit(s) ahead of us"
 
           conflict=false
+          auto_resolved=""
           if [ "$behind_before" -eq 0 ]; then
             echo "::notice::already up to date with upstream/$UPSTREAM_REF"
           elif git merge --no-edit "upstream/$UPSTREAM_REF"; then
             echo "::notice::merged $behind_before upstream commit(s)"
           else
-            files=$(git diff --name-only --diff-filter=U | paste -sd' ' -)
+            conflicted=$(git diff --name-only --diff-filter=U)
             git merge --abort
-            conflict=true
-            echo "::error::upstream merge conflicts in: ${files:-<unknown>} - the samsung branch cannot advance until these are resolved by hand; this run publishes a payload that is $behind_before commit(s) behind $upstream_version_name"
+            # SAMSUNG_OWNED files are ours to define: retry keeping our side of
+            # the conflicting hunks. The LKM/ksud build right after is the safety
+            # net - if upstream moved a signature we depend on it will not compile
+            # and the run fails before a payload is published.
+            unowned=""
+            for f in $conflicted; do
+              case " $SAMSUNG_OWNED " in
+                *" $f "*) ;;
+                *) unowned="$unowned $f" ;;
+              esac
+            done
+            if [ -n "$conflicted" ] && [ -z "$unowned" ]; then
+              if git merge --no-edit -X ours "upstream/$UPSTREAM_REF"; then
+                auto_resolved=$(echo $conflicted | paste -sd' ' -)
+                echo "::warning::auto-resolved samsung-owned conflicts by keeping our side of: $auto_resolved"
+              else
+                git merge --abort >/dev/null 2>&1 || true
+                conflict=true
+                echo "::error::auto-resolve failed in: $(echo $conflicted | paste -sd' ' -) - resolve by hand"
+              fi
+            else
+              conflict=true
+              echo "::error::upstream merge conflicts in:${unowned:- $conflicted} - these are NOT samsung-owned files, resolve by hand; this run publishes a payload $behind_before commit(s) behind $upstream_version_name"
+            fi
           fi
 
           # Keep the fork's tags in sync so `git describe` inside the build jobs
@@ -99,6 +126,7 @@ jobs:
             echo "sha=$(git rev-parse HEAD)"
             echo "behind=$behind_after"
             echo "conflict=$conflict"
+            echo "auto_resolved=$auto_resolved"
             echo "upstream_commit=$upstream_commit"
             echo "upstream_version_name=$upstream_version_name"
           } >> "$GITHUB_OUTPUT"
@@ -191,6 +219,7 @@ jobs:
           commit_short=$(git rev-parse --short=8 HEAD)
           built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           version_pinned=$version_pinned
+          merge_auto_resolved=${{ needs.sync.outputs.auto_resolved }}
           git_version_name=$git_version_name
           behind_upstream=${{ needs.sync.outputs.behind }}
           upstream_commit=${{ needs.sync.outputs.upstream_commit }}
