@@ -31,6 +31,9 @@ env:
   # Files the samsung delta owns. A conflict confined to these is
   # auto-resolved in our favour; anything else fails loudly.
   SAMSUNG_OWNED: "kernel/core/init.c kernel/Kbuild kernel/Kconfig kernel/hook/arm64/patch_memory.c kernel/hook/arm64/syscall_hook.c kernel/hook/x86_64/syscall_hook.c kernel/hook/syscall_hook.h kernel/hook/syscall_hook_manager.c kernel/hook/tp_marker.c kernel/feature/selinux_hide.c kernel/policy/app_profile.c"
+  # Conflicts under these prefixes are resolved in our
+  # favour too: they are not part of the ksud payload.
+  PAYLOAD_IRRELEVANT_PREFIXES: "manager/"
   VARIANT: bakasu
   UPSTREAM_REPO: https://github.com/Baka-SU/BakaSU.git
   UPSTREAM_REF: main
@@ -95,12 +98,28 @@ jobs:
             # net - if upstream moved a signature we depend on it will not compile
             # and the run fails before a payload is published.
             unowned=""
+            ignored=""
             for f in $conflicted; do
               case " $SAMSUNG_OWNED " in
-                *" $f "*) ;;
-                *) unowned="$unowned $f" ;;
+                *" $f "*) ignored="$ignored $f"; continue ;;
               esac
+              # manager/** is not part of the ksud payload, so a conflict there
+              # must not block the payload: keep this branch's manager.
+              payload_irrelevant=false
+              for p in ${PAYLOAD_IRRELEVANT_PREFIXES:-}; do
+                case "$f" in
+                  "$p"*) payload_irrelevant=true ;;
+                esac
+              done
+              if [ "$payload_irrelevant" = true ]; then
+                ignored="$ignored $f"
+              else
+                unowned="$unowned $f"
+              fi
             done
+            if [ -n "$ignored" ]; then
+              echo "::notice::conflicts outside the payload (resolved in our favour):$ignored"
+            fi
             if [ -n "$conflicted" ] && [ -z "$unowned" ]; then
               if git merge --no-edit -X ours "upstream/$UPSTREAM_REF"; then
                 auto_resolved=$(echo $conflicted | paste -sd' ' -)
