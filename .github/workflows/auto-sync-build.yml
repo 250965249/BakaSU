@@ -78,6 +78,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
           git fetch upstream "$UPSTREAM_REF" --tags --force
+          # captured so the merge result can be reduced back to our own
+          # .github/workflows (see the restore below)
+          ours_before=$(git rev-parse HEAD)
 
           upstream_commit=$(git rev-parse --short=8 "upstream/$UPSTREAM_REF")
           upstream_version_name=$(git describe --tags --always "upstream/$UPSTREAM_REF" | sed 's/^v//')
@@ -88,7 +91,7 @@ jobs:
           auto_resolved=""
           if [ "$behind_before" -eq 0 ]; then
             echo "::notice::already up to date with upstream/$UPSTREAM_REF"
-          elif git merge --no-edit "upstream/$UPSTREAM_REF"; then
+          elif git merge --no-edit --no-ff "upstream/$UPSTREAM_REF"; then
             echo "::notice::merged $behind_before upstream commit(s)"
           else
             conflicted=$(git diff --name-only --diff-filter=U)
@@ -121,7 +124,7 @@ jobs:
               echo "::notice::conflicts outside the payload (resolved in our favour):$ignored"
             fi
             if [ -n "$conflicted" ] && [ -z "$unowned" ]; then
-              if git merge --no-edit -X ours "upstream/$UPSTREAM_REF"; then
+              if git merge --no-edit --no-ff -X ours "upstream/$UPSTREAM_REF"; then
                 auto_resolved=$(echo $conflicted | paste -sd' ' -)
                 echo "::warning::auto-resolved samsung-owned conflicts by keeping our side of: $auto_resolved"
               else
@@ -133,6 +136,19 @@ jobs:
               conflict=true
               echo "::error::upstream merge conflicts in:${unowned:- $conflicted} - these are NOT samsung-owned files, resolve by hand; this run publishes a payload $behind_before commit(s) behind $upstream_version_name"
             fi
+          fi
+
+          # GITHUB_TOKEN is an installation token and may not create or update
+          # files under .github/workflows ("refusing to allow a GitHub App ...
+          # without workflows permission"), which rejected the whole push. This
+          # fork's CI is ours anyway, so pin that directory to the pre-merge
+          # snapshot and fold the restore into the merge commit.
+          if ! git diff --quiet "$ours_before" HEAD -- .github/workflows; then
+            rm -rf .github/workflows
+            git checkout "$ours_before" -- .github/workflows
+            git add -A
+            git commit -q --amend --no-edit
+            echo "::notice::kept our .github/workflows - a token push may not modify workflow files"
           fi
 
           # Keep the fork's tags in sync so `git describe` inside the build jobs
