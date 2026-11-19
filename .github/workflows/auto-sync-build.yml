@@ -232,6 +232,10 @@ jobs:
           # tag. Drop every non-version tag locally so the stamp matches upstream.
           git tag -l | grep -Ev '^v[0-9]' | xargs -r git tag -d >/dev/null || true
 
+          # The checkout only carries tags that exist on the fork (`latest-ksud`),
+          # so describe fell back to a bare sha. Bring the upstream version tags
+          # in locally (never pushed) to name the build after its upstream base.
+          git fetch --tags --force "$UPSTREAM_REPO" 'refs/tags/v*:refs/tags/v*' >/dev/null 2>&1 || true
           git_version_name=$(git describe --tags --always | sed 's/^v//')
           # Follow build.rs instead of hardcoding the offset: upstream has changed
           # the formula twice already (40000-2815 -> 30000-4001 -> 30000+996).
