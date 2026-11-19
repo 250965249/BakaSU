@@ -235,8 +235,9 @@ jobs:
           git_version_name=$(git describe --tags --always | sed 's/^v//')
           # Follow build.rs instead of hardcoding the offset: upstream has changed
           # the formula twice already (40000-2815 -> 30000-4001 -> 30000+996).
-          offset_expr=$(grep -oE 'let version_code = [^;]+;' userspace/ksud/build.rs | head -n1 \
-            | sed -E 's/^let version_code = //; s/;[[:space:]]*$//; s/ \+ version_code$//')
+          offset_expr=$(grep -oE 'let version_code = [0-9]+ [+-] [0-9]+ \+ version_code' \
+            userspace/ksud/build.rs | head -n1 \
+            | sed -E 's/^let version_code = //; s/ \+ version_code$//')
           if [ -z "$offset_expr" ]; then
             offset_expr="$VERSION_CODE_OFFSET"
           fi
