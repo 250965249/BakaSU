@@ -127,6 +127,17 @@ jobs:
               if git merge --no-edit --no-ff -X ours "upstream/$UPSTREAM_REF"; then
                 auto_resolved=$(echo $conflicted | paste -sd' ' -)
                 echo "::warning::auto-resolved samsung-owned conflicts by keeping our side of: $auto_resolved"
+              elif [ -z "$(git diff --name-only --diff-filter=U | grep -v '^\.github/workflows/' || true)" ]; then
+                # `-X ours` cannot resolve modify/delete, and upstream keeps
+                # deleting or renaming workflow files. They are never part of the
+                # payload and are restored from the pre-merge snapshot anyway, so
+                # keep ours and finish the merge by hand.
+                rm -rf .github/workflows
+                git checkout "$ours_before" -- .github/workflows
+                git add -A
+                git commit --no-edit -q
+                auto_resolved=$(echo $conflicted | paste -sd' ' -)
+                echo "::warning::kept our .github/workflows to finish the merge: $auto_resolved"
               else
                 git merge --abort >/dev/null 2>&1 || true
                 conflict=true
