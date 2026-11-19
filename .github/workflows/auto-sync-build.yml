@@ -33,7 +33,7 @@ env:
   SAMSUNG_OWNED: "kernel/core/init.c kernel/Kbuild kernel/Kconfig kernel/hook/arm64/patch_memory.c kernel/hook/arm64/syscall_hook.c kernel/hook/x86_64/syscall_hook.c kernel/hook/syscall_hook.h kernel/hook/syscall_hook_manager.c kernel/hook/tp_marker.c kernel/feature/selinux_hide.c kernel/policy/app_profile.c"
   # Conflicts under these prefixes are resolved in our
   # favour too: they are not part of the ksud payload.
-  PAYLOAD_IRRELEVANT_PREFIXES: "manager/"
+  PAYLOAD_IRRELEVANT_PREFIXES: "manager/ .github/workflows/"
   VARIANT: bakasu
   UPSTREAM_REPO: https://github.com/Baka-SU/BakaSU.git
   UPSTREAM_REF: main
@@ -234,8 +234,8 @@ jobs:
           fi
 
           # The binary is the authority: it must agree with the tree we publish.
-          embedded_code=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}' "$bin" | head -n1 | sed 's/KSU_NO_NEW_PRIVS//')
-          embedded_name=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}[0-9A-Za-z._:+~-]+' "$bin" | head -n1 | sed -E 's/^KSU_NO_NEW_PRIVS[0-9]{5}//')
+          embedded_code=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}' "$bin" | head -n1 | sed 's/KSU_NO_NEW_PRIVS//' || true)
+          embedded_name=$(grep -aoE 'KSU_NO_NEW_PRIVS[0-9]{5}[0-9A-Za-z._:+~-]+' "$bin" | head -n1 | sed -E 's/^KSU_NO_NEW_PRIVS[0-9]{5}//' || true)
           # The name literal is only usually pooled next to the code; when it is
           # not, record the git value rather than an empty field.
           if [ -z "$embedded_name" ]; then
