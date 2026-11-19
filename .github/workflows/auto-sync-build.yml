@@ -233,7 +233,15 @@ jobs:
           git tag -l | grep -Ev '^v[0-9]' | xargs -r git tag -d >/dev/null || true
 
           git_version_name=$(git describe --tags --always | sed 's/^v//')
-          version_code=$(( VERSION_CODE_OFFSET + $(git rev-list --count HEAD) ))
+          # Follow build.rs instead of hardcoding the offset: upstream has changed
+          # the formula twice already (40000-2815 -> 30000-4001 -> 30000+996).
+          offset_expr=$(grep -oE 'let version_code = [^;]+;' userspace/ksud/build.rs | head -n1 \
+            | sed -E 's/^let version_code = //; s/;[[:space:]]*$//; s/ \+ version_code$//')
+          if [ -z "$offset_expr" ]; then
+            offset_expr="$VERSION_CODE_OFFSET"
+          fi
+          echo "version-code offset from build.rs: $offset_expr"
+          version_code=$(( offset_expr + $(git rev-list --count HEAD) ))
           version_name="$git_version_name"
           version_pinned=false
           if [ -n "${EXPECTED_STAMP:-}" ]; then
